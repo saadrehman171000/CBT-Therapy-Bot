@@ -60,21 +60,22 @@ A modern web application that combines Cognitive Behavioral Therapy (CBT) techni
 1. Clone the repository
 
     ```bash
-    git clone https://github.com/yourusername/cbt-therapy-bot.git
+    git clone https://github.com/saadrehman171000/CBT-Therapy-Bot.git
     cd cbt-therapy-bot
     ```
 
 2. Install frontend dependencies
 
     ```bash
-    cd cbt-chatbot-frontend
+    cd frontend
     npm install
     ```
 
 3. Install backend dependencies
 
     ```bash
-    cd ../
+    cd ..
+    cd backend
     pip install -r requirements.txt
     ```
 
@@ -91,13 +92,14 @@ A modern web application that combines Cognitive Behavioral Therapy (CBT) techni
     **Backend:**
 
     ```bash
+    cd backend
     python run.py
     ```
 
     **Frontend:**
 
     ```bash
-    cd cbt-chatbot-frontend
+    cd frontend
     npm run dev
     ```
 
