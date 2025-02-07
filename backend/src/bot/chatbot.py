@@ -41,18 +41,35 @@ class CBTChatbot:
             # Process the message and get sentiment
             sentiment_data = self.analyze_sentiment(user_input)
             
+            # Check if this is the first message
+            is_first_message = len(self.conversation_history) == 0
+            
+            # Get conversation theme
+            conversation_theme = self._get_conversation_theme()
+            
             # Prepare conversation context
-            context = f"""You are a CBT (Cognitive Behavioral Therapy) chatbot. 
-            Your role is to help users with their mental well-being using CBT techniques.
+            context = f"""You are a CBT therapist having a focused conversation. 
+            Your goal is to understand and help with the user's current situation.
+
+            Previous messages: {self._get_recent_messages(3)}
             
-            Current user sentiment: {sentiment_data['primary_emotion']} 
-            Emotion intensity: {sentiment_data['emotion_intensity']}/10
-            Mood: {sentiment_data['identified_mood']}
+            User's current state:
+            - Emotion: {sentiment_data['primary_emotion']}
+            - Intensity: {sentiment_data['emotion_intensity']}/10
+            - Mood: {sentiment_data['identified_mood']}
+            - Current theme: {conversation_theme}
             
-            Respond with empathy and use appropriate CBT techniques. Keep responses concise and focused.
+            Response Guidelines:
+            1. NO greetings (hi/hello) except for the very first message
+            2. ONE short response (1-2 sentences) addressing the current topic
+            3. ONE specific follow-up question
+            4. NO repetition of previous suggestions
+            5. NO changing topics unless user initiates
             
-            User message: {user_input}
-            """
+            Conversation state: {"Starting conversation" if is_first_message else "Ongoing conversation"}
+            User's message: {user_input}
+            
+            Respond with one brief statement and one question:"""
             
             # Generate response using Gemini
             response = self.model.generate_content(context)
@@ -98,19 +115,36 @@ class CBTChatbot:
             
             # Map polarity to emotion and intensity
             polarity = blob.sentiment.polarity
+            subjectivity = blob.sentiment.subjectivity
             
-            if polarity > 0.3:
+            if polarity > 0.5:
                 primary_emotion = "happy"
                 mood = "positive"
-            elif polarity < -0.3:
+            elif polarity > 0.2:
+                primary_emotion = "hopeful"
+                mood = "positive"
+            elif polarity < -0.5:
                 primary_emotion = "sad"
+                mood = "negative"
+            elif polarity < -0.2:
+                primary_emotion = "concerned"
                 mood = "negative"
             else:
                 primary_emotion = "neutral"
                 mood = "neutral"
             
-            # Convert polarity to 1-10 scale
-            intensity = int(abs(polarity * 10)) or 5  # Default to 5 if near zero
+            # Calculate intensity on a more balanced 1-10 scale
+            base_intensity = abs(polarity) * 10  # Convert -1 to 1 range to 0-10
+            
+            # Adjust intensity based on subjectivity and content
+            if len(text.split()) <= 3:  # Short responses
+                intensity = min(5, base_intensity)  # Cap at 5 for very short responses
+            else:
+                # Blend base intensity with subjectivity
+                intensity = (base_intensity * 0.7 + (subjectivity * 10) * 0.3)
+            
+            # Round to nearest integer and ensure within 1-10 range
+            intensity = max(1, min(10, round(intensity)))
             
             return {
                 "primary_emotion": primary_emotion,
@@ -414,4 +448,46 @@ Type any message to chat normally.
             
         except Exception as e:
             print(f"Error completing survey: {e}")
-            return self._get_error_response() 
+            return self._get_error_response()
+
+    def _get_recent_messages(self, count: int = 3) -> str:
+        """Get recent message history for context"""
+        recent = self.conversation_history[-count:] if len(self.conversation_history) > 0 else []
+        if not recent:
+            return "No previous messages"
+            
+        messages = []
+        for msg in recent:
+            messages.append(f"User: {msg['user_input']}")
+            messages.append(f"Therapist: {msg['bot_response']}")
+        
+        return "\n".join(messages)
+
+    def _get_conversation_theme(self) -> str:
+        """Extract the main theme of the current conversation"""
+        if len(self.conversation_history) == 0:
+            return "Initial greeting"
+            
+        # Get last 3 messages
+        recent_messages = self.conversation_history[-3:]
+        
+        # Extract keywords from recent messages
+        keywords = []
+        for msg in recent_messages:
+            user_input = msg['user_input'].lower()
+            if 'play' in user_input:
+                keywords.append('activities')
+            if any(word in user_input for word in ['sad', 'happy', 'angry', 'feel']):
+                keywords.append('emotions')
+            if any(word in user_input for word in ['think', 'thought', 'mind']):
+                keywords.append('thoughts')
+                
+        # Determine main theme
+        if 'emotions' in keywords:
+            return "Discussing emotions and feelings"
+        elif 'activities' in keywords:
+            return "Discussing activities and interests"
+        elif 'thoughts' in keywords:
+            return "Exploring thoughts and perspectives"
+        else:
+            return "General conversation" 
